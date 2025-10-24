@@ -2,6 +2,12 @@
 
 ## Local Development (npm)
 
+```
+Ensure you have .env in backend and frontend directories. You can create them using: .env.example as a template.
+This is just a temporary setup for local development.
+Then proceed with the following steps:
+```
+
 ```bash
 
 # 1. Edit backend/.env with your credentials
