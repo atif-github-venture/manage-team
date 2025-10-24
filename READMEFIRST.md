@@ -3,12 +3,15 @@
 ## Local Development (npm)
 
 ```bash
-# 1. Edit backend/.env with your credentials
+# 1. Setup environment files
+./setup-local.sh
 
-# 2. Start application
+# 2. Edit backend/.env with your credentials
+
+# 3. Start application
 ./start-local.sh
 
-# 3. Stop application
+# 4. Stop application
 ./stop-local.sh
 ```
 
@@ -55,12 +58,29 @@ podman rm team-management
 - Ollama running (optional, for AI features)
 - SMTP credentials (optional, for emails)
 
+## Database Setup
+
+**First time only - Initialize MongoDB collections:**
+
+```bash
+./init-db.sh
+```
+
+This creates all collections with proper indexes and a default admin user.
+
+**Default Admin Credentials:**
+- Email: `admin@company.com`
+- Password: `Admin@123`
+
+⚠️ **Change password immediately after first login!**
+
 ---
 
 ## Scripts
 
 | Script | Purpose |
 |--------|---------|
+| `init-db.sh` | Initialize MongoDB collections and indexes |
 | `setup-local.sh` | Create .env files and logs directory |
 | `start-local.sh` | Start frontend + backend with npm |
 | `stop-local.sh` | Stop both services |
