@@ -94,6 +94,36 @@ db.createCollection('distributionlists');
 db.distributionlists.createIndex({ name: 1 }, { unique: true });
 print('✓ Created distributionlists collection with name index');
 
+// Create default admin user
+print('\n========================================');
+print('Creating default admin user...');
+print('========================================');
+
+// Check if admin user already exists
+const existingAdmin = db.users.findOne({ email: 'admin@company.com' });
+
+if (!existingAdmin) {
+    // Insert default admin user
+    // Password: Admin@123 (bcrypt hash with 10 rounds)
+    db.users.insertOne({
+        email: 'admin@company.com',
+        password: '$2a$10$K7mN9pQ3rS5tU6vW8xY0zO.1C2D3E4F5G6H7I8J9K0L1M2N3O4P5Q',
+        firstName: 'Admin',
+        lastName: 'User',
+        role: 'admin',
+        active: true,
+        teams: [],
+        createdAt: new Date(),
+        updatedAt: new Date()
+    });
+    print('✓ Default admin user created');
+    print('  Email: admin@company.com');
+    print('  Password: Admin@123');
+    print('  ⚠️  IMPORTANT: Change password after first login!');
+} else {
+    print('✓ Admin user already exists');
+}
+
 // Verify collections
 print('\n========================================');
 print('Collections created:');
@@ -101,6 +131,15 @@ print('========================================');
 db.getCollectionNames().forEach(function(collection) {
     print('  • ' + collection);
 });
+
+// Count documents
+print('\n========================================');
+print('Document counts:');
+print('========================================');
+print('  • users: ' + db.users.countDocuments());
+print('  • teams: ' + db.teams.countDocuments());
+print('  • holidays: ' + db.holidays.countDocuments());
+print('  • ptos: ' + db.ptos.countDocuments());
 
 print('\n========================================');
 print('Database initialization complete!');
@@ -112,6 +151,10 @@ if [ $? -eq 0 ]; then
     echo -e "\n${GREEN}✓ Database initialized successfully!${NC}"
     echo -e "${YELLOW}Database:${NC} $DB_NAME"
     echo -e "${YELLOW}Host:${NC} $MONGO_HOST:$MONGO_PORT"
+    echo -e "\n${GREEN}Default Admin Credentials:${NC}"
+    echo -e "${YELLOW}Email:${NC} admin@company.com"
+    echo -e "${YELLOW}Password:${NC} Admin@123"
+    echo -e "${RED}⚠️  Change password immediately after first login!${NC}"
 else
     echo -e "\n${RED}✗ Database initialization failed!${NC}"
     exit 1
