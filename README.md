@@ -3,15 +3,13 @@
 ## Local Development (npm)
 
 ```bash
-# 1. Setup environment files
-./setup-local.sh
 
-# 2. Edit backend/.env with your credentials
+# 1. Edit backend/.env with your credentials
 
-# 3. Start application
+# 2. Start application
 ./start-local.sh
 
-# 4. Stop application
+# 3. Stop application
 ./stop-local.sh
 ```
 
