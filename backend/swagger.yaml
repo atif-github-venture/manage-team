@@ -1,0 +1,1539 @@
+openapi: 3.0.3
+info:
+  title: Team Management & Capacity Planning API
+  description: |
+    Production-ready REST API for team management, capacity planning, PTO tracking, 
+    and Jira integration with AI-powered insights.
+    
+    ## Features
+    - JWT Authentication with refresh tokens
+    - Role-based authorization (Admin/Viewer)
+    - Jira integration for project tracking
+    - AI-powered insights using Ollama
+    - Capacity planning and forecasting
+    - PTO management workflow
+    - Holiday calendar with flexible hours
+    - Complete audit trail
+    
+    ## Authentication
+    Most endpoints require a Bearer token in the Authorization header:
+    ```
+    Authorization: Bearer <your-jwt-token>
+    ```
+    
+    Get a token by calling POST /api/auth/login
+  version: 1.0.0
+  contact:
+    email: api@company.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:5000/api
+    description: Development server
+  - url: https://staging-api.company.com/api
+    description: Staging server
+  - url: https://api.company.com/api
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: Teams
+    description: Team management operations
+  - name: Users
+    description: User management (Admin only)
+  - name: Holidays
+    description: Company holiday management
+  - name: PTO
+    description: PTO/leave request management
+  - name: Jira Queries
+    description: JQL query management (replaces teams.yaml)
+  - name: Time Trends
+    description: Performance metrics and analytics
+  - name: Teamwork Insights
+    description: AI-powered team insights
+  - name: Future Capacity
+    description: Capacity planning and forecasting
+  - name: Audit Logs
+    description: System audit trail (Admin only)
+  - name: Constants
+    description: Application constants for frontend
+
+security:
+  - BearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - firstName
+                - lastName
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@company.com
+                password:
+                  type: string
+                  minLength: 8
+                  example: SecurePass123!
+                firstName:
+                  type: string
+                  minLength: 2
+                  example: John
+                lastName:
+                  type: string
+                  minLength: 2
+                  example: Doe
+                role:
+                  type: string
+                  enum: [admin, viewer]
+                  default: viewer
+                  example: viewer
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@company.com
+                password:
+                  type: string
+                  example: SecurePass123!
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Logout user
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessMessage'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Refresh JWT access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          token:
+                            type: string
+                          refreshToken:
+                            type: string
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /auth/me:
+    get:
+      tags:
+        - Authentication
+      summary: Get current user profile
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /auth/change-password:
+    put:
+      tags:
+        - Authentication
+      summary: Change user password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - currentPassword
+                - newPassword
+              properties:
+                currentPassword:
+                  type: string
+                  example: OldPass123!
+                newPassword:
+                  type: string
+                  minLength: 8
+                  example: NewSecurePass456!
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessMessage'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /teams:
+    get:
+      tags:
+        - Teams
+      summary: Get all teams
+      parameters:
+        - name: active
+          in: query
+          schema:
+            type: boolean
+        - name: location
+          in: query
+          schema:
+            type: string
+            enum: [US, India, Global]
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: sort
+          in: query
+          schema:
+            type: string
+            default: teamName
+      responses:
+        '200':
+          description: Teams retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          teams:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Team'
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+    post:
+      tags:
+        - Teams
+      summary: Create a new team (Admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamInput'
+      responses:
+        '201':
+          description: Team created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Team'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /teams/{id}:
+    get:
+      tags:
+        - Teams
+      summary: Get team by ID
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Team retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TeamDetailed'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    put:
+      tags:
+        - Teams
+      summary: Update team (Admin only)
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamInput'
+      responses:
+        '200':
+          description: Team updated successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Team'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    delete:
+      tags:
+        - Teams
+      summary: Delete team (Admin only)
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessMessage'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /teams/{id}/members:
+    get:
+      tags:
+        - Teams
+      summary: Get team members
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Team members retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          teamId:
+                            type: string
+                          teamName:
+                            type: string
+                          members:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/TeamMember'
+
+    post:
+      tags:
+        - Teams
+      summary: Add member to team (Admin only)
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamMemberInput'
+      responses:
+        '201':
+          description: Member added successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TeamMember'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /holidays:
+    get:
+      tags:
+        - Holidays
+      summary: Get holidays with filtering
+      parameters:
+        - name: location
+          in: query
+          schema:
+            type: string
+            enum: [US, India, Global]
+        - name: year
+          in: query
+          schema:
+            type: integer
+            example: 2025
+        - name: month
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [date, name]
+            default: date
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Holidays retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          holidays:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Holiday'
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+
+    post:
+      tags:
+        - Holidays
+      summary: Create holiday (Admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HolidayInput'
+      responses:
+        '201':
+          description: Holiday created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Holiday'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /pto:
+    get:
+      tags:
+        - PTO
+      summary: Get PTO requests
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: string
+        - name: teamId
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [vacation, sick, personal, other]
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: PTOs retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          ptos:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/PTO'
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+
+    post:
+      tags:
+        - PTO
+      summary: Create PTO request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PTOInput'
+      responses:
+        '201':
+          description: PTO request created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PTO'
+
+  /pto/{id}/approve:
+    post:
+      tags:
+        - PTO
+      summary: Approve PTO request (Admin only)
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+                  example: Approved - enjoy your vacation!
+      responses:
+        '200':
+          description: PTO approved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /pto/{id}/reject:
+    post:
+      tags:
+        - PTO
+      summary: Reject PTO request (Admin only)
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - rejectionReason
+              properties:
+                rejectionReason:
+                  type: string
+                  example: Insufficient coverage during that period
+      responses:
+        '200':
+          description: PTO rejected successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /jira-query/team/{teamId}:
+    get:
+      tags:
+        - Jira Queries
+      summary: Get all JQL queries for a team
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: JQL queries retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          teamId:
+                            type: string
+                          teamName:
+                            type: string
+                          queries:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/JiraQuery'
+
+  /jira-query:
+    post:
+      tags:
+        - Jira Queries
+      summary: Create JQL query (Admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JiraQueryInput'
+      responses:
+        '201':
+          description: JQL query created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/JiraQuery'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /time-trend/associate:
+    get:
+      tags:
+        - Time Trends
+      summary: Get associate time trend data
+      parameters:
+        - name: teamId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Associate metrics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssociateMetrics'
+
+  /time-trend/team:
+    get:
+      tags:
+        - Time Trends
+      summary: Get team time trend data
+      parameters:
+        - name: teamId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Team metrics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMetrics'
+
+  /teamwork-insights/generate:
+    post:
+      tags:
+        - Teamwork Insights
+      summary: Generate AI-powered team insights
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - teamId
+                - startDate
+                - endDate
+              properties:
+                teamId:
+                  type: string
+                startDate:
+                  type: string
+                  format: date
+                endDate:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Insights generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamInsights'
+
+  /future-capacity/calculate:
+    post:
+      tags:
+        - Future Capacity
+      summary: Calculate team capacity for future period
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - teamId
+                - startDate
+                - endDate
+              properties:
+                teamId:
+                  type: string
+                startDate:
+                  type: string
+                  format: date
+                endDate:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Capacity calculated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapacityResponse'
+
+  /audit-logs:
+    get:
+      tags:
+        - Audit Logs
+      summary: Get audit logs (Admin only)
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          schema:
+            type: string
+            enum: [CREATE, UPDATE, DELETE, LOGIN, LOGOUT, APPROVE, REJECT]
+        - name: resourceType
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [success, failure]
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Audit logs retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          logs:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/AuditLog'
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /constants:
+    get:
+      tags:
+        - Constants
+      summary: Get application constants
+      security: []
+      responses:
+        '200':
+          description: Constants retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Constants'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Resource ID
+
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: Page number
+
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: Items per page
+
+  schemas:
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Operation completed successfully
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: Error description
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 100
+        page:
+          type: integer
+          example: 1
+        pages:
+          type: integer
+          example: 5
+        limit:
+          type: integer
+          example: 20
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 507f1f77bcf86cd799439011
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+        lastName:
+          type: string
+        role:
+          type: string
+          enum: [admin, viewer]
+        teams:
+          type: array
+          items:
+            type: string
+        active:
+          type: boolean
+        lastLogin:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    AuthResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                token:
+                  type: string
+                refreshToken:
+                  type: string
+                user:
+                  $ref: '#/components/schemas/User'
+
+    Team:
+      type: object
+      properties:
+        id:
+          type: string
+        teamId:
+          type: string
+        teamName:
+          type: string
+        description:
+          type: string
+        location:
+          type: string
+          enum: [US, India, Global]
+        jiraProjectKey:
+          type: string
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TeamInput:
+      type: object
+      required:
+        - teamId
+        - teamName
+        - location
+      properties:
+        teamId:
+          type: string
+          example: ENG-001
+        teamName:
+          type: string
+          example: Engineering Team
+        description:
+          type: string
+        location:
+          type: string
+          enum: [US, India, Global]
+        jiraProjectKey:
+          type: string
+
+    TeamDetailed:
+      allOf:
+        - $ref: '#/components/schemas/Team'
+        - type: object
+          properties:
+            members:
+              type: array
+              items:
+                $ref: '#/components/schemas/TeamMember'
+
+    TeamMember:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        jiraAccountId:
+          type: string
+        designation:
+          type: string
+        joinDate:
+          type: string
+          format: date
+        active:
+          type: boolean
+
+    TeamMemberInput:
+      type: object
+      required:
+        - userId
+        - jiraAccountId
+      properties:
+        userId:
+          type: string
+        jiraAccountId:
+          type: string
+        designation:
+          type: string
+        joinDate:
+          type: string
+          format: date
+
+    Holiday:
+      type: object
+      properties:
+        id:
+          type: string
+        holidayName:
+          type: string
+        date:
+          type: string
+          format: date
+        location:
+          type: string
+          enum: [US, India, Global]
+        hours:
+          type: number
+          description: Holiday hours (8=full day, 4=half day, custom)
+          example: 8
+        description:
+          type: string
+        recurring:
+          type: boolean
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    HolidayInput:
+      type: object
+      required:
+        - holidayName
+        - date
+        - location
+        - hours
+      properties:
+        holidayName:
+          type: string
+        date:
+          type: string
+          format: date
+        location:
+          type: string
+          enum: [US, India, Global]
+        hours:
+          type: number
+          minimum: 0
+          maximum: 24
+        description:
+          type: string
+        recurring:
+          type: boolean
+
+    PTO:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        user:
+          type: object
+          properties:
+            firstName:
+              type: string
+            lastName:
+              type: string
+            email:
+              type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        type:
+          type: string
+          enum: [vacation, sick, personal, other]
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        duration:
+          type: number
+          description: Total PTO hours
+        reason:
+          type: string
+        approvedBy:
+          type: object
+          properties:
+            id:
+              type: string
+            firstName:
+              type: string
+            lastName:
+              type: string
+        approvedAt:
+          type: string
+          format: date-time
+        rejectionReason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    PTOInput:
+      type: object
+      required:
+        - startDate
+        - endDate
+        - type
+      properties:
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        type:
+          type: string
+          enum: [vacation, sick, personal, other]
+        reason:
+          type: string
+        notes:
+          type: string
+
+    JiraQuery:
+      type: object
+      properties:
+        id:
+          type: string
+        teamId:
+          type: string
+        jqlKey:
+          type: string
+          example: hist_query
+        jqlQuery:
+          type: string
+          example: project = PROJ AND assignee in (accountId1, accountId2)
+        description:
+          type: string
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    JiraQueryInput:
+      type: object
+      required:
+        - teamId
+        - jqlKey
+        - jqlQuery
+      properties:
+        teamId:
+          type: string
+        jqlKey:
+          type: string
+          enum: [hist_query_associate, hist_query_team, hist_query, workinsights_query, future_capacity]
+        jqlQuery:
+          type: string
+        description:
+          type: string
+
+    AssociateMetrics:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                associate:
+                  type: object
+                  properties:
+                    userId:
+                      type: string
+                    name:
+                      type: string
+                    email:
+                      type: string
+                period:
+                  type: object
+                  properties:
+                    startDate:
+                      type: string
+                      format: date-time
+                    endDate:
+                      type: string
+                      format: date-time
+                    workingDays:
+                      type: integer
+                    totalWorkingHours:
+                      type: number
+                metrics:
+                  type: object
+                  properties:
+                    totalIssues:
+                      type: integer
+                    totalStoryPoints:
+                      type: number
+                    totalTimeSpent:
+                      type: number
+                    utilization:
+                      type: number
+                    storyBurnRate:
+                      type: number
+
+    TeamMetrics:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                team:
+                  type: object
+                  properties:
+                    teamId:
+                      type: string
+                    teamName:
+                      type: string
+                teamMetrics:
+                  type: object
+                  properties:
+                    totalIssues:
+                      type: integer
+                    totalStoryPoints:
+                      type: number
+                    averageUtilization:
+                      type: number
+
+    TeamInsights:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                team:
+                  type: object
+                period:
+                  type: object
+                teamMetrics:
+                  type: object
+                members:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      userId:
+                        type: string
+                      name:
+                        type: string
+                      metrics:
+                        type: object
+                      aiSummary:
+                        type: string
+                teamSummary:
+                  type: string
+
+    CapacityResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                team:
+                  type: object
+                period:
+                  type: object
+                  properties:
+                    startDate:
+                      type: string
+                      format: date-time
+                    endDate:
+                      type: string
+                      format: date-time
+                    workingDays:
+                      type: integer
+                teamCapacity:
+                  type: object
+                  properties:
+                    totalWorkingHours:
+                      type: number
+                    estimatedCapacityStoryPoints:
+                      type: number
+                memberCapacity:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      userId:
+                        type: string
+                      name:
+                        type: string
+                      workingHours:
+                        type: number
+                      estimatedStoryPoints:
+                        type: number
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        user:
+          type: object
+          properties:
+            firstName:
+              type: string
+            lastName:
+              type: string
+        action:
+          type: string
+          enum: [CREATE, UPDATE, DELETE, LOGIN, LOGOUT, APPROVE, REJECT]
+        resourceType:
+          type: string
+        resourceId:
+          type: string
+        changes:
+          type: object
+        ipAddress:
+          type: string
+        status:
+          type: string
+          enum: [success, failure]
+        timestamp:
+          type: string
+          format: date-time
+
+    Constants:
+      type: object
+      properties:
+        USER_ROLES:
+          type: object
+        PTO_TYPES:
+          type: object
+        PTO_STATUS:
+          type: object
+        LOCATIONS:
+          type: object
+        DEFAULT_WORKING_HOURS_PER_DAY:
+          type: integer
+
+  responses:
+    SuccessMessage:
+      description: Operation successful
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SuccessResponse'
+
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    UnauthorizedError:
+      description: Unauthorized - Invalid or missing token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    ForbiddenError:
+      description: Forbidden - Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    ConflictError:
+      description: Conflict - Resource already exists
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
