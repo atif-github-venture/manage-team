@@ -1,4 +1,3 @@
-import { emailTransporter } from '../config/email.js';
 import emailConfig from '../config/email.js';
 
 class EmailService {
@@ -11,6 +10,9 @@ class EmailService {
                 return null;
             }
 
+            // Create transporter with fresh CyberArk credentials
+            const transporter = await emailConfig.createTransporter();
+
             const mailOptions = {
                 from: options.from || config.from,
                 to: options.to,
@@ -20,12 +22,26 @@ class EmailService {
                 attachments: options.attachments
             };
 
-            const info = await emailTransporter.sendMail(mailOptions);
+            const info = await transporter.sendMail(mailOptions);
 
             console.log('Email sent:', info.messageId);
             return info;
         } catch (error) {
             console.error('Email send error:', error.message);
+
+            // Provide specific error messages
+            if (error.message.includes('CyberArk')) {
+                throw error; // Re-throw CyberArk errors as-is
+            }
+
+            if (error.code === 'EAUTH') {
+                throw new Error('Email authentication failed - SMTP credentials invalid');
+            }
+
+            if (error.code === 'ECONNREFUSED') {
+                throw new Error('Email server connection refused - check SMTP host and port');
+            }
+
             throw new Error(`Failed to send email: ${error.message}`);
         }
     }
@@ -131,7 +147,7 @@ ${m.name}
             });
         } catch (error) {
             console.error('Send weekly insights error:', error.message);
-            throw new Error(`Failed to send weekly insights: ${error.message}`);
+            throw error;
         }
     }
 
@@ -177,7 +193,7 @@ ${m.name}
             });
         } catch (error) {
             console.error('Send PTO notification error:', error.message);
-            throw new Error(`Failed to send PTO notification: ${error.message}`);
+            throw error;
         }
     }
 
@@ -209,7 +225,7 @@ ${m.name}
             });
         } catch (error) {
             console.error('Send password reset email error:', error.message);
-            throw new Error(`Failed to send password reset email: ${error.message}`);
+            throw error;
         }
     }
 
@@ -240,7 +256,7 @@ ${m.name}
             });
         } catch (error) {
             console.error('Send welcome email error:', error.message);
-            throw new Error(`Failed to send welcome email: ${error.message}`);
+            throw error;
         }
     }
 }
