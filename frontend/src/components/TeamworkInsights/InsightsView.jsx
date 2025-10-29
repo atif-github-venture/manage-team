@@ -173,15 +173,8 @@ export default function InsightsView() {
 
         setSendingEmail(true);
         try {
-            await insightsService.emailInsights({
-                insights,
-                recipients,
-                teamName: insights.teamName,
-                dateRange: {
-                    startDate: format(startDate, 'yyyy-MM-dd'),
-                    endDate: format(endDate, 'yyyy-MM-dd')
-                }
-            });
+            // FIXED: Pass insightsData and recipients separately
+            await insightsService.sendInsightsEmail(insights, recipients);
 
             enqueueSnackbar('Email sent successfully', { variant: 'success' });
             setEmailDialogOpen(false);
