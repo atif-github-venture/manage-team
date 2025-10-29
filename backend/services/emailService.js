@@ -10,7 +10,7 @@ class EmailService {
                 return null;
             }
 
-            // Create transporter with fresh CyberArk credentials
+            // Create transporter with fresh credentials
             const transporter = await emailConfig.createTransporter();
 
             const mailOptions = {
@@ -30,8 +30,8 @@ class EmailService {
             console.error('Email send error:', error.message);
 
             // Provide specific error messages
-            if (error.message.includes('CyberArk')) {
-                throw error; // Re-throw CyberArk errors as-is
+            if (error.message.includes('Error')) {
+                throw error; // Re-throw Error errors as-is
             }
 
             if (error.code === 'EAUTH') {
