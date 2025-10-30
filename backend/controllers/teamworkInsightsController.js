@@ -3,8 +3,10 @@ import ollamaService from '../services/ollamaService.js';
 import dateService from '../services/dateService.js';
 import emailService from '../services/emailService.js';
 import { generateInsightsHTML } from '../utils/htmlGenerator.js';
+import { generateInsightsEmailHTML } from '../utils/htmlGeneratorEmail.js';
 import Team from '../models/Team.js';
 import JiraQuery from '../models/JiraQuery.js';
+
 
 export const generateTeamworkInsights = async (req, res) => {
     try {
@@ -340,7 +342,7 @@ export const exportInsightsHTML = async (req, res) => {
         console.log('Period:', insightsData.period);
         console.log('Members:', insightsData.members.length);
 
-        // Generate HTML using the already-generated insights data
+        // Generate HTML with charts for Copy/Download
         const htmlContent = generateInsightsHTML(insightsData);
 
         res.status(200).json({
@@ -374,7 +376,7 @@ export const sendInsightsEmail = async (req, res) => {
         console.log('Team:', insightsData.teamName);
 
         // Generate HTML using the already-generated insights data
-        const htmlContent = generateInsightsHTML(insightsData);
+        const htmlContent = generateInsightsEmailHTML(insightsData);
 
         // Send email
         await emailService.send({
@@ -389,6 +391,20 @@ export const sendInsightsEmail = async (req, res) => {
         });
     } catch (error) {
         console.error('Send insights email error:', error);
+        // SMTP-specific errors
+        if (error.message.includes('Email authentication failed')) {
+            return res.status(503).json({
+                success: false,
+                message: 'Email authentication failed. SMTP credentials are invalid.'
+            });
+        }
+
+        if (error.message.includes('Email server connection refused')) {
+            return res.status(503).json({
+                success: false,
+                message: 'Cannot connect to email server. Please check SMTP host and port configuration.'
+            });
+        }
         res.status(500).json({
             success: false,
             message: error.message || 'Failed to send email'
